@@ -6,3 +6,6 @@ The idea woudl be to play with Rust and see how it can be implemented with the f
 3. Adding CLI interface.
 4. Using crate in Python - Foreign Function Interfaces (FFI) and see how easy/hard it is.
 5. Convert counter into generic
+6. Microbenchmarking/
+7. Parallelization - TBB pipeline style.
+8. Multiple asserts in uni tests
