@@ -76,7 +76,14 @@ fn deletes(splits: &[(String, String)]) -> Vec<String> {
     let deletes: Vec<String>
         = splits
         .into_iter()
-        .map(|(l, r)| [l.to_string(), r[1..].to_string()].concat() )
+        .map(|(l, r)| {
+            let l0 = r.len();
+            let mut chars = r.chars();
+            chars.next();
+            let l1 = r.len();
+            assert_eq!(l0, l1);
+            [l.to_string(), chars.collect()].concat()
+        } )
         .collect();
     deletes
 }
@@ -87,29 +94,18 @@ fn print_helper(v: &[u8]) {
 
 fn transposes(splits: &[(String, String)]) -> Vec<String> {
     // transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
+
     let transposes: Vec<String>
         = splits
         .into_iter()
         .filter(|(_, r)| r.len() > 1)
-        .map(|(l, r)| (l.as_bytes(), r.as_bytes()))
         .map(|(l, r)| {
-            print_helper(r);
-            print_helper(&r[1..2]);
-            print_helper(&r[0..1],);
-            print_helper(&r[2..]);
+            let mut chars = r.chars().clone();
+            let r0 = chars.next().unwrap().to_string();
+            let r1 = chars.next().unwrap().to_string();
+            let rest: String = chars.collect();
 
-            //println!("Bla {:?} {:?} {:?} {:?}", String::from_utf8(r.to_vec()), &r[1..2].to_vec(), &r[0..1], &r[2..]);
-            let v: Vec<u8> = [
-                l,
-                &r[1..2],
-                &r[0..1],
-                &r[2..]
-            ].concat();
-            let s = String::from_utf8_lossy(&v);
-            //if s.is_err() {
-                println!("{:?}", s);
-            //}
-            s.to_string()
+            [l.clone(), r1, r0, rest].join("")
             })
         .collect();
     transposes
@@ -248,12 +244,12 @@ impl SpellChecker {
                 if self.word_count.contains_key(word) { self.word_count[word] } else { 0 } );
         candidates.dedup();
 
-        let mut i = 0;
-        for word in (&candidates).into_iter().rev() {
-            println!("{} {}", word, if self.word_count.contains_key(word) { self.word_count[word] } else { 0 } );
-            i += 1;
-            if i > 10 {break;}
-        }
+        // let mut i = 0;
+        // for word in (&candidates).into_iter().rev() {
+        //     println!("{} {}", word, if self.word_count.contains_key(word) { self.word_count[word] } else { 0 } );
+        //     i += 1;
+        //     if i > 10 {break;}
+        // }
 
         candidates.last().unwrap().to_string()
     }
@@ -276,7 +272,6 @@ impl SpellChecker {
         if !edits_1.is_empty() { return edits_1; }
 
         let v = self.known(&edits_distance_2(word));
-        println!("Len: {}", v.len());
         if !v.is_empty() { return v; }
 
         v0
@@ -429,7 +424,7 @@ mod tests {
 
         let mut exp_transposes: Vec<String> =  vec![
             "ążę",
-            "żąę"
+            "żęą"
         ]
             .into_iter()
             .map(|word| word.to_string())
@@ -443,31 +438,59 @@ mod tests {
     fn test_chain_of_transpose_and_delete() {
         let word = String::from("peotryy");
 
-        let mut candidates: Vec<String> = Vec::new();
+        let delete_transpose = {
+            // builds a chain - first delete, then transpose
 
-        let word_splits = word_split(&word);
-        let mut transposes = transposes(&word_splits);
+            let mut candidates: Vec<String> = Vec::new();
 
-        transposes.sort();
-        transposes.dedup();
-        for word in &transposes {
-            println!("{}", word);
-        }
-
-        let poetryy = String::from("poetryy");
-        assert!(transposes.contains(&poetryy));
-
-        for word in &transposes {
             let word_splits = word_split(&word);
-            let deletes = deletes(&word_splits);
-            candidates.extend(deletes.into_iter());
-        }
+            let mut deletes = deletes(&word_splits);
 
-        candidates.sort();
-        candidates.dedup();
+            let peotry = String::from("peotry");
+            assert!(deletes.contains(&peotry));
 
-        let poetry = String::from("poetry");
-        assert!(candidates.contains(&poetry));
+            for word in &deletes {
+                let word_splits = word_split(&word);
+                let deletes = transposes(&word_splits);
+                candidates.extend(deletes.into_iter());
+            }
+
+            candidates.sort();
+            candidates.dedup();
+
+            let poetry = String::from("poetry");
+            assert!(candidates.contains(&poetry));
+
+            candidates
+        };
+        let transpose_delete = {
+            // builds a chain - first transpose, then delete
+
+            let mut candidates: Vec<String> = Vec::new();
+
+            let word_splits = word_split(&word);
+            let mut transposes = transposes(&word_splits);
+
+            let poetryy = String::from("poetryy");
+            assert!(transposes.contains(&poetryy));
+
+            for word in &transposes {
+                let word_splits = word_split(&word);
+                let deletes = deletes(&word_splits);
+                candidates.extend(deletes.into_iter());
+            }
+
+            candidates.sort();
+            candidates.dedup();
+
+            let poetry = String::from("poetry");
+            assert!(candidates.contains(&poetry));
+
+            candidates
+        };
+
+        assert_eq!(transpose_delete.len(), delete_transpose.len());
+        assert_eq!(transpose_delete, delete_transpose);
     }
 
     #[test]
