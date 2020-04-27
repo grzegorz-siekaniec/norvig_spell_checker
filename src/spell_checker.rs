@@ -348,6 +348,35 @@ mod tests {
     }
 
     #[test]
+    fn test_deletes() {
+        let split: Vec<_> = vec![
+            ("", "the"),
+            ("t", "he")
+        ];
+
+        let split: Vec<(_, _)> = split
+            .into_iter()
+            .map(|(l, r)| (l.to_string(), r.to_string()))
+            .collect();
+
+        let mut act_deletes = deletes(&split);
+        act_deletes.sort();
+
+        assert_eq!(2, act_deletes.len());
+
+        let mut exp_deletes: Vec<String> =  vec![
+            "he",
+            "te"
+        ]
+            .into_iter()
+            .map(|word| word.to_string())
+            .collect();
+        exp_deletes.sort();
+
+        assert_eq!(act_deletes, exp_deletes);
+    }
+
+    #[test]
     fn test_transposes() {
         let split: Vec<_> = vec![
             ("", "the"),
@@ -438,59 +467,25 @@ mod tests {
     fn test_chain_of_transpose_and_delete() {
         let word = String::from("peotryy");
 
-        let delete_transpose = {
-            // builds a chain - first delete, then transpose
+        let mut candidates: Vec<String> = Vec::new();
 
-            let mut candidates: Vec<String> = Vec::new();
+        let word_splits = word_split(&word);
+        let mut deletes = deletes(&word_splits);
 
+        let peotry = String::from("peotry");
+        assert!(deletes.contains(&peotry));
+
+        for word in &deletes {
             let word_splits = word_split(&word);
-            let mut deletes = deletes(&word_splits);
+            let deletes = transposes(&word_splits);
+            candidates.extend(deletes.into_iter());
+        }
 
-            let peotry = String::from("peotry");
-            assert!(deletes.contains(&peotry));
+        candidates.sort();
+        candidates.dedup();
 
-            for word in &deletes {
-                let word_splits = word_split(&word);
-                let deletes = transposes(&word_splits);
-                candidates.extend(deletes.into_iter());
-            }
-
-            candidates.sort();
-            candidates.dedup();
-
-            let poetry = String::from("poetry");
-            assert!(candidates.contains(&poetry));
-
-            candidates
-        };
-        let transpose_delete = {
-            // builds a chain - first transpose, then delete
-
-            let mut candidates: Vec<String> = Vec::new();
-
-            let word_splits = word_split(&word);
-            let mut transposes = transposes(&word_splits);
-
-            let poetryy = String::from("poetryy");
-            assert!(transposes.contains(&poetryy));
-
-            for word in &transposes {
-                let word_splits = word_split(&word);
-                let deletes = deletes(&word_splits);
-                candidates.extend(deletes.into_iter());
-            }
-
-            candidates.sort();
-            candidates.dedup();
-
-            let poetry = String::from("poetry");
-            assert!(candidates.contains(&poetry));
-
-            candidates
-        };
-
-        assert_eq!(transpose_delete.len(), delete_transpose.len());
-        assert_eq!(transpose_delete, delete_transpose);
+        let poetry = String::from("poetry");
+        assert!(candidates.contains(&poetry));
     }
 
     #[test]
@@ -504,7 +499,7 @@ mod tests {
             ("bycycle", "bicycle"),                 // replace
             ("inconvient", "inconvenient"),         // insert 2
             ("arrainged", "arranged"),              // delete
-            //("peotry", "poetry"),                   // transpose
+            ("peotry", "poetry"),                   // transpose
             ("peotryy", "poetry"),                  // transpose + delete
             ("word", "word"),                       // known
             ("quintessential", "quintessential")    // unknown
