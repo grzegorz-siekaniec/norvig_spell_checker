@@ -45,17 +45,6 @@ fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
     Ok(io::BufReader::new(file).lines())
 }
 
-fn update_word_count(word_count: &mut HashMap<String, usize> , vec: &[String]) {
-    //let mut word_count: HashMap<String, usize> = HashMap::new();
-    for item in vec.iter() {
-        *word_count
-            .entry(item.to_string())
-            .or_insert(0) += 1;
-
-    }
-}
-
-
 pub struct SpellChecker {
     word_count: HashMap<String, usize>
 }
@@ -72,6 +61,16 @@ fn word_split(word: &String) -> Vec<(String, String)> {
     word_splits
 }
 
+fn update_word_count(word_count: &mut HashMap<String, usize> , vec: &[String]) {
+    //let mut word_count: HashMap<String, usize> = HashMap::new();
+    for item in vec.iter() {
+        *word_count
+            .entry(item.to_string())
+            .or_insert(0) += 1;
+
+    }
+}
+
 fn deletes(splits: &[(String, String)]) -> Vec<String> {
     let deletes: Vec<String>
         = splits
@@ -86,10 +85,6 @@ fn deletes(splits: &[(String, String)]) -> Vec<String> {
         } )
         .collect();
     deletes
-}
-
-fn print_helper(v: &[u8]) {
-    println!("string: {:?} representation {:?}", v, String::from_utf8(v.to_vec()));
 }
 
 fn transposes(splits: &[(String, String)]) -> Vec<String> {
@@ -191,7 +186,6 @@ impl SpellChecker {
 
     pub fn from_corpus_file(corpus_fn: String) -> SpellChecker {
         let path_to_read = Path::new(&corpus_fn);
-        println!("{:?}", path_to_read.to_str());
 
         let mut word_count: HashMap<String, usize> = HashMap::new();
         let re = regex::Regex::new(r"(?P<word>\w+)").unwrap();
@@ -339,7 +333,7 @@ mod tests {
             .map(|split| { (split.0.to_string(), split.1.to_string()) })
             .collect();
 
-        let mut actual: HashSet<_>
+        let actual: HashSet<_>
             = word_splits
             .into_iter()
             .collect();
@@ -470,7 +464,7 @@ mod tests {
         let mut candidates: Vec<String> = Vec::new();
 
         let word_splits = word_split(&word);
-        let mut deletes = deletes(&word_splits);
+        let deletes = deletes(&word_splits);
 
         let peotry = String::from("peotry");
         assert!(deletes.contains(&peotry));
@@ -500,7 +494,7 @@ mod tests {
             ("inconvient", "inconvenient"),         // insert 2
             ("arrainged", "arranged"),              // delete
             ("peotry", "poetry"),                   // transpose
-            ("peotryy", "poetry"),                  // transpose + delete
+            ("arrainged", "poetry"),                  // transpose + delete
             ("word", "word"),                       // known
             ("quintessential", "quintessential")    // unknown
         ];

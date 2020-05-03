@@ -1,12 +1,11 @@
-#[macro_use]
 extern crate log;
 
 pub mod spell_checker;
 
+/* Python interface */
+
 #[cfg(test)]
 mod tests {
-    use std::panic;
-
     #[test]
     fn it_works() {
         // assert_eq!(2 + 2, 5);
