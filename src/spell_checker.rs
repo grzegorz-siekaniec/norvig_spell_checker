@@ -1,9 +1,14 @@
-
 extern crate regex;
+extern crate libc;
+extern crate crossbeam;
+
+use libc::c_char;
 use std::path::Path;
 use std::fs::File;
 use std::io::{self,BufRead};
 use std::collections::HashMap;
+use std::ffi::{CStr, CString};
+use std::time::{Instant};
 
 // def words(text): return re.findall(r'\w+', text.lower())
 //
@@ -153,6 +158,21 @@ fn edits_distance_1(word: &String) -> Vec<String> {
     // inserts    = [L + c + R               for L, R in splits for c in letters]
 
     let word_splits = word_split(&word);
+
+    // let mut edits_1: Vec<String> = vec![];
+    // crossbeam::scope(|s| {
+    //     let th_deletes = s.spawn(|_| deletes(&word_splits));
+    //     let th_transposes = s.spawn(|_| transposes(&word_splits));
+    //     let th_replaces = s.spawn(|_| replaces(&word_splits));
+    //     let th_inserts = s.spawn(|_| inserts(&word_splits));
+    //
+    //     edits_1.extend(th_deletes.join().unwrap());
+    //     edits_1.extend(th_transposes.join().unwrap());
+    //     edits_1.extend(th_replaces.join().unwrap());
+    //     edits_1.extend(th_inserts.join().unwrap());
+    // }).unwrap();
+
+    // left for benchmarking
     let mut edits_1: Vec<String> = [
         deletes(&word_splits),
         transposes(&word_splits),
@@ -171,12 +191,12 @@ fn edits_distance_1(word: &String) -> Vec<String> {
     edits_1
 }
 
-fn edits_distance_2(word: &String) -> Vec<String> {
+fn edits_distance_2(edits_1: &Vec<String>) -> Vec<String> {
     // return (e2 for e1 in edits1(word) for e2 in edits1(e1))
 
     let mut edits_2: Vec<String> = Vec::new();
-    for e1 in edits_distance_1(&word) {
-        edits_2.extend(edits_distance_1(&e1).into_iter());
+    for e1 in edits_1 {
+        edits_2.extend(edits_distance_1(&e1));
     }
 
     edits_2
@@ -196,7 +216,7 @@ impl SpellChecker {
         // for line in reader.lines() {
         //     println!("{}", line?);
         //}
-
+        let now = Instant::now();
         if let Ok(lines) = read_lines(path_to_read) {
             // Consumes the iterator, returns an (Optional) String
             for line in lines {
@@ -207,11 +227,14 @@ impl SpellChecker {
                         .map(|cap| { (&cap["word"]).to_ascii_lowercase() })
                         .collect();
 
+                    // use messaging here
                     update_word_count(&mut word_count, &words);
                 }
             }
         }
-
+        let new_now = Instant::now();
+        //info!("It took {:?} to instantate ", new_now.duration_since(now));
+        println!("It took {:?} to instantate ", new_now.duration_since(now));
         SpellChecker{
             word_count
         }
@@ -262,16 +285,67 @@ impl SpellChecker {
         let v = self.known(&v0);
         if !v.is_empty() { return v; }
 
-        let edits_1 = self.known(&edits_distance_1(word));
-        if !edits_1.is_empty() { return edits_1; }
+        let edits_1 = edits_distance_1(word);
+        let known_edits_1 = self.known(&edits_1);
+        if !known_edits_1.is_empty() { return known_edits_1; }
 
-        let v = self.known(&edits_distance_2(word));
+        let v = self.known(&edits_distance_2(&edits_1));
+        //let v = self.known(&edits_distance_2(&word));
         if !v.is_empty() { return v; }
 
         v0
     }
 }
 
+#[no_mangle]
+    pub extern "C" fn spell_checker_from_corpus_file(zip: *const c_char) -> *mut SpellChecker {
+    let corpus_file = unsafe {
+        assert!(!zip.is_null());
+        CStr::from_ptr(zip).to_str()
+    };
+
+    let corpus_file: String = {
+        if corpus_file.is_ok() {
+            corpus_file.unwrap().to_string()
+        }
+        else {
+            panic!("");
+        }
+    };
+
+    Box::into_raw(Box::new(SpellChecker::from_corpus_file(corpus_file)))
+}
+
+#[no_mangle]
+pub extern "C" fn spell_checker_free(ptr: *mut SpellChecker) {
+    if ptr.is_null() {
+        return;
+    }
+    unsafe {
+        println!("Free Spell Checker in rust");
+        Box::from_raw(ptr);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn spell_checker_correction(
+    ptr: *const SpellChecker,
+    word: *const c_char,
+) -> *mut c_char  {
+    let spell_checker = unsafe {
+        assert!(!ptr.is_null());
+        &*ptr
+    };
+    let word = unsafe {
+        //assert!(!spell_checker.is_null());
+        CStr::from_ptr(word)
+    };
+    let word_str = word.to_str().unwrap().to_string();
+    let correction = spell_checker.correction(&word_str);
+    unsafe {
+        CString::from_vec_unchecked(correction.as_bytes().to_vec()).into_raw()
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -494,7 +568,7 @@ mod tests {
             ("inconvient", "inconvenient"),         // insert 2
             ("arrainged", "arranged"),              // delete
             ("peotry", "poetry"),                   // transpose
-            ("arrainged", "poetry"),                  // transpose + delete
+            ("peotryy", "poetry"),                  // transpose + delete
             ("word", "word"),                       // known
             ("quintessential", "quintessential")    // unknown
         ];

@@ -1,10 +1,11 @@
 #[macro_use]
 extern crate log;
 extern crate env_logger;
+extern crate rayon;
 
 extern crate norvig_spell_checker;
-extern crate regex;
 
+use rayon::prelude::*;
 use clap::{App, Arg};
 use std::time::{Instant};
 use ascii_table::{AsciiTable, Column, Align};
@@ -71,7 +72,8 @@ fn main() {
     let sc = norvig_spell_checker::spell_checker::SpellChecker::from_corpus_file(corpus_file);
 
     let word_correction: Vec<Vec<_>>
-        = words.into_iter()
+        //= words.into_iter()
+        = words.par_iter()
         .map(|word| {
             let word = word.to_string();
             let correction = sc.correction(&word);
