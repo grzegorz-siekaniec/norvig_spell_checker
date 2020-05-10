@@ -233,8 +233,7 @@ impl SpellChecker {
             }
         }
         let new_now = Instant::now();
-        //info!("It took {:?} to instantate ", new_now.duration_since(now));
-        println!("It took {:?} to instantate ", new_now.duration_since(now));
+        info!("It took {:?} to instantate ", new_now.duration_since(now));
         SpellChecker{
             word_count
         }

@@ -2,7 +2,6 @@
 extern crate log;
 extern crate env_logger;
 extern crate rayon;
-
 extern crate norvig_spell_checker;
 
 use rayon::prelude::*;
