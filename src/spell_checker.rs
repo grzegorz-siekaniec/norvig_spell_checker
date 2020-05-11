@@ -1,6 +1,9 @@
 extern crate regex;
 extern crate libc;
 extern crate crossbeam;
+extern crate crossbeam_channel;
+extern crate threadpool;
+extern crate num_cpus;
 
 use libc::c_char;
 use std::path::Path;
@@ -9,6 +12,10 @@ use std::io::{self,BufRead};
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::time::{Instant};
+use crossbeam_channel::unbounded;
+use threadpool::ThreadPool;
+use std::sync::Arc;
+
 
 // def words(text): return re.findall(r'\w+', text.lower())
 //
@@ -51,7 +58,7 @@ fn read_lines<P>(filename: P) -> io::Result<io::Lines<io::BufReader<File>>>
 }
 
 pub struct SpellChecker {
-    word_count: HashMap<String, usize>
+    pub word_count: HashMap<String, usize>
 }
 
 // do a microbenchmarking for that
@@ -204,7 +211,56 @@ fn edits_distance_2(edits_1: &Vec<String>) -> Vec<String> {
 
 impl SpellChecker {
 
-    pub fn from_corpus_file(corpus_fn: String) -> SpellChecker {
+    pub fn from_corpus_file_par(corpus_fn: &String) -> SpellChecker {
+        let (snd, rcv) = unbounded();
+
+        let path_to_read = Path::new(&corpus_fn);
+        let pool = ThreadPool::new(num_cpus::get());
+        info!("Using {} threads", num_cpus::get());
+
+        // let file = File::open("foo.txt")?;
+        // let reader = BufReader::new(file);
+        //
+        // for line in reader.lines() {
+        //     println!("{}", line?);
+        //}
+        //let re = regex::Regex::new(r"(?P<word>\w+)").unwrap();
+        let now = Instant::now();
+        let re = Arc::new(regex::Regex::new(r"(?P<word>\w+)").unwrap());
+
+        if let Ok(lines) = read_lines(path_to_read) {
+            // Consumes the iterator, returns an (Optional) String
+            for line in lines {
+
+                let re = re.clone();
+                let snd = snd.clone();
+                pool.execute(move || {
+                    if let Ok(ip) = line {
+                        let words: Vec<String> = re
+                            .captures_iter(&ip)
+                            .map(|cap| { (&cap["word"]).to_ascii_lowercase() })
+                            .collect();
+                        snd.send(words).unwrap();
+                }
+                });
+            }
+        }
+        drop(snd);
+        pool.join();
+
+        let mut word_count: HashMap<String, usize> = HashMap::new();
+        for words in rcv.iter() {
+            update_word_count(&mut word_count, &words);
+        }
+
+        let new_now = Instant::now();
+        info!("It took {:?} to instantate (par) ", new_now.duration_since(now));
+        SpellChecker{
+            word_count
+        }
+    }
+
+    pub fn from_corpus_file(corpus_fn: &String) -> SpellChecker {
         let path_to_read = Path::new(&corpus_fn);
 
         let mut word_count: HashMap<String, usize> = HashMap::new();
@@ -312,7 +368,7 @@ impl SpellChecker {
         }
     };
 
-    Box::into_raw(Box::new(SpellChecker::from_corpus_file(corpus_file)))
+    Box::into_raw(Box::new(SpellChecker::from_corpus_file(&corpus_file)))
 }
 
 #[no_mangle]
@@ -558,7 +614,7 @@ mod tests {
     #[test]
     fn test_correction() {
         let file: String = String::from("/home/gsiekaniec/devel/rust_projects/norvig_spell_checker/data/big.txt");
-        let sc = SpellChecker::from_corpus_file(file);
+        let sc = SpellChecker::from_corpus_file(&file);
 
         let misspelling_correct: Vec<(_, _)> = vec![
             ("speling", "spelling"),                // insert

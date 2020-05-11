@@ -68,10 +68,15 @@ fn main() {
     info!("Using corpus file located at {:}", corpus_file);
     info!("Words {:?}", words);
     let now = Instant::now();
-    let sc = norvig_spell_checker::spell_checker::SpellChecker::from_corpus_file(corpus_file);
+    let sc = norvig_spell_checker::spell_checker::SpellChecker::from_corpus_file_par(&corpus_file);
+    // let hm_par = sc.word_count.clone();
+    //
+    // let sc = norvig_spell_checker::spell_checker::SpellChecker::from_corpus_file(&corpus_file);
+    // let hm_seq = sc.word_count.clone();
+
+    // assert_eq!(hm_par, hm_seq);
 
     let word_correction: Vec<Vec<_>>
-        //= words.into_iter()
         = words.par_iter()
         .map(|word| {
             let word = word.to_string();

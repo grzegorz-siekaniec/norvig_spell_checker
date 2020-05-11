@@ -14,7 +14,10 @@ clap = ""
 ascii_table = "3.0.0"
 libc = ""
 crossbeam = ""
+crossbeam-channel = ""
 rayon = ""
+threadpool = ""
+num_cpus = ""
 
 [lib]
 name = "norvig_spell_checker"
