@@ -18,7 +18,8 @@ crossbeam-channel = ""
 rayon = ""
 threadpool = ""
 num_cpus = ""
+dotenv = "0.15"
 
-[lib]
-name = "norvig_spell_checker"
+# [lib]
+# name = "norvig_spell_checker"
 # crate-type = ["dylib"]
