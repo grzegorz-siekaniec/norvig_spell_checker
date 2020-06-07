@@ -14,6 +14,9 @@ const CMD_CORRECT: &str = "correct";
 mod command_line_corrections;
 
 fn main() {
+    dotenv().ok();
+    env_logger::init();
+
     let matches = App::new("spell-checker")
         .version("1.0")
         .author("Grzegorz Siekaniec")
@@ -35,10 +38,9 @@ fn main() {
         .subcommand(SubCommand::with_name(CMD_RUN).about("Run the correction server."))
         .get_matches();
 
-    env_logger::init();
     match matches.subcommand() {
         (CMD_CORRECT, Some(matches)) => {
-            let (corpus_file, words) = extract_correct_cmd_arguments(&matches);
+            let (corpus_file, words) = extract_cmd_correct_arguments(&matches);
             provide_words_corrections(corpus_file, words);
         }
         (CMD_RUN, _) => {
@@ -50,7 +52,7 @@ fn main() {
     }
 }
 
-fn extract_correct_cmd_arguments<'a>(matches: &'a ArgMatches) -> (String, Vec<&'a str>) {
+fn extract_cmd_correct_arguments<'a>(matches: &'a ArgMatches) -> (String, Vec<&'a str>) {
     let corpus_file: String = {
         let corpus_arg = matches.value_of("corpus");
         if corpus_arg.is_some() {
