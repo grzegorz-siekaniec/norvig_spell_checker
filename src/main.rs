@@ -1,19 +1,31 @@
 #[macro_use]
 extern crate log;
 extern crate env_logger;
+extern crate hyper;
 extern crate norvig_spell_checker;
 extern crate rayon;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
+
+use std::convert::Infallible;
+//use futures::{future, Future};
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Error, Method, Request, Response, Server, StatusCode};
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 use command_line_corrections::provide_words_corrections;
 use dotenv::dotenv;
+use std::env;
+use futures::{StreamExt, TryStreamExt};
 
 const CMD_RUN: &str = "run";
 const CMD_CORRECT: &str = "correct";
 
 mod command_line_corrections;
 
-fn main() {
+#[tokio::main]
+pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
     dotenv().ok();
     env_logger::init();
 
@@ -40,19 +52,39 @@ fn main() {
 
     match matches.subcommand() {
         (CMD_CORRECT, Some(matches)) => {
-            let (corpus_file, words) = extract_cmd_correct_arguments(&matches);
+            let (corpus_file, words) = correct_cmd_handler(&matches);
             provide_words_corrections(corpus_file, words);
+            Ok(())
         }
         (CMD_RUN, _) => {
-            // start server
+            let make_svc = make_service_fn(|_conn| {
+                // This is the `Service` that will handle the connection.
+                // `service_fn` is a helper to convert a function that
+                // returns a Response into a `Service`.
+                async { Ok::<_, Infallible>(service_fn(microservice_handler)) }
+            });
+
+            let addr = env::var("ADDRESS")
+                .unwrap_or_else(|_| "127.0.0.1:8080".into())
+                .parse()
+                .expect("can't parse ADDRESS variable");
+
+            let server = Server::bind(&addr).serve(make_svc);
+
+            info!("Listening on http://{}", addr);
+
+            server.await?;
+
+            Ok(())
         }
         _ => {
             matches.usage();
+            Ok(())
         }
     }
 }
 
-fn extract_cmd_correct_arguments<'a>(matches: &'a ArgMatches) -> (String, Vec<&'a str>) {
+fn correct_cmd_handler<'a>(matches: &'a ArgMatches) -> (String, Vec<&'a str>) {
     let corpus_file: String = {
         let corpus_arg = matches.value_of("corpus");
         if corpus_arg.is_some() {
@@ -72,4 +104,54 @@ fn extract_cmd_correct_arguments<'a>(matches: &'a ArgMatches) -> (String, Vec<&'
     };
 
     (corpus_file, words)
+}
+
+async fn microservice_handler(mut req: Request<Body>) -> Result<Response<Body>, Infallible> {
+
+    match (req.method(), req.uri().path()){
+        (&Method::GET, "/correction") => {
+
+            let mut body = Vec::new();
+            while let Some(chunk) = req.body_mut().next().await {
+                body.extend_from_slice(&chunk.unwrap());
+            }
+            // try to parse as json with serde_json
+            let correction_req: CorrectionRequest = serde_json::from_slice(&body).unwrap();
+            info!("Received {:?}", correction_req);
+
+            let serialized_correction_req = serde_json::to_string(&correction_req).unwrap();
+            Ok(Response::new(Body::from(serialized_correction_req)))
+        }
+        _ => {
+            Ok(empty_response_with_code(StatusCode::NOT_FOUND))
+        }
+    }
+}
+
+
+fn empty_response_with_code(status_code: StatusCode) -> Response<Body> {
+    Response::builder()
+        .status(status_code)
+        .body(Body::empty())
+        .unwrap()
+}
+
+#[derive(Debug)]
+#[derive(Deserialize)]
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CorrectionRequest
+{
+    words: Vec<String>
+}
+
+struct Correction
+{
+    word: String,
+    correction: String
+}
+
+struct CorrectionResponse
+{
+    corrections: Vec<Correction>
 }
