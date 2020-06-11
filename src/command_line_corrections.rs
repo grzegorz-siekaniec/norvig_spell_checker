@@ -1,12 +1,12 @@
 use ascii_table::{Align, AsciiTable, Column};
+use norvig_spell_checker::spell_checker::SpellChecker;
 use rayon::prelude::*;
 use std::time::Instant;
 
-pub fn provide_words_corrections(corpus_file: String, words: Vec<&str>) {
-    info!("Using corpus file located at {:}", corpus_file);
+pub fn provide_words_corrections(spell_checker: &SpellChecker, words: Vec<&str>) {
     info!("Words {:?}", words);
     let now = Instant::now();
-    let sc = norvig_spell_checker::spell_checker::SpellChecker::from_corpus_file_par(&corpus_file);
+
     // let hm_par = sc.word_count.clone();
     //
     // let sc = norvig_spell_checker::spell_checker::SpellChecker::from_corpus_file(&corpus_file);
@@ -18,7 +18,7 @@ pub fn provide_words_corrections(corpus_file: String, words: Vec<&str>) {
         .par_iter()
         .map(|word| {
             let word = word.to_string();
-            let correction = sc.correction(&word);
+            let correction = spell_checker.correction(&word);
             vec![word, correction]
         })
         .collect();
@@ -45,4 +45,46 @@ fn print_correction(word_correction: &Vec<Vec<String>>) {
     ascii_table.columns.insert(1, suggestion_column);
 
     ascii_table.print(word_correction);
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorrectionRequest {
+    pub words: Vec<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Correction {
+    word: String,
+    correction: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CorrectionResponse {
+    corrections: Vec<Correction>,
+}
+// merge with above
+pub fn provide_words_corrections_req(
+    spell_checker: &SpellChecker,
+    words: Vec<String>,
+) -> CorrectionResponse {
+    info!("Words {:?}", words);
+    let now = Instant::now();
+
+    let corrections: Vec<Correction> = words
+        .into_par_iter()
+        .map(|word| {
+            let correction = spell_checker.correction(&word);
+            Correction { word, correction }
+        })
+        .collect();
+
+    let new_now = Instant::now();
+    info!(
+        "It took {:?} to find corrections for words",
+        new_now.duration_since(now)
+    );
+    CorrectionResponse { corrections }
 }

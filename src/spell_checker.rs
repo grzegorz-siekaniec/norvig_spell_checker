@@ -194,6 +194,8 @@ fn edits_distance_2(edits_1: &Vec<String>) -> Vec<String> {
 
 impl SpellChecker {
     pub fn from_corpus_file_par(corpus_fn: &String) -> SpellChecker {
+        info!("Using corpus file located at {:}", corpus_fn);
+
         let (snd, rcv) = unbounded();
 
         let path_to_read = Path::new(&corpus_fn);
@@ -236,7 +238,7 @@ impl SpellChecker {
 
         let new_now = Instant::now();
         info!(
-            "It took {:?} to instantate (par) ",
+            "Spell checker initialized. It took {:?} to instantate (par) ",
             new_now.duration_since(now)
         );
         SpellChecker { word_count }

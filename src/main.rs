@@ -17,7 +17,10 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use command_line_corrections::provide_words_corrections;
 use dotenv::dotenv;
 use std::env;
-use futures::{StreamExt, TryStreamExt};
+use futures::{StreamExt, TryStreamExt, TryFutureExt};
+use norvig_spell_checker::spell_checker::SpellChecker;
+use std::sync::Arc;
+use crate::command_line_corrections::{CorrectionResponse, CorrectionRequest, provide_words_corrections_req};
 
 const CMD_RUN: &str = "run";
 const CMD_CORRECT: &str = "correct";
@@ -47,21 +50,44 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
                 )
                 .arg(Arg::with_name("words").required(true).multiple(true)),
         )
-        .subcommand(SubCommand::with_name(CMD_RUN).about("Run the correction server."))
+        .subcommand(SubCommand::with_name(CMD_RUN)
+            .about("Run the correction server.")
+            .arg(
+                Arg::with_name("corpus")
+                    .help("Specifies a corpus file to initialise spell-checker")
+                    .takes_value(true)
+                    .short("c")
+                    .long("corpus")
+                    .required(false)
+                    .multiple(false),
+            )
+        )
         .get_matches();
 
     match matches.subcommand() {
         (CMD_CORRECT, Some(matches)) => {
             let (corpus_file, words) = correct_cmd_handler(&matches);
-            provide_words_corrections(corpus_file, words);
+            let spell_checker = SpellChecker::from_corpus_file_par(&corpus_file);
+            provide_words_corrections(&spell_checker, words);
             Ok(())
         }
-        (CMD_RUN, _) => {
-            let make_svc = make_service_fn(|_conn| {
+        (CMD_RUN, Some(matches)) => {
+            let corpus_file = corpus_file(matches);
+            let spell_checker = Arc::new(
+                SpellChecker::from_corpus_file_par(&corpus_file)
+            );
+
+            let make_svc = make_service_fn(move |_conn| {
                 // This is the `Service` that will handle the connection.
                 // `service_fn` is a helper to convert a function that
                 // returns a Response into a `Service`.
-                async { Ok::<_, Infallible>(service_fn(microservice_handler)) }
+                let spell_checker = spell_checker.clone();
+                async move {
+                    Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
+                        let spell_checker = spell_checker.clone();
+                            microservice_handler(req, spell_checker)
+                    }))
+                }
             });
 
             let addr = env::var("ADDRESS")
@@ -84,6 +110,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
     }
 }
 
+// TODO: rename
 fn correct_cmd_handler<'a>(matches: &'a ArgMatches) -> (String, Vec<&'a str>) {
     let corpus_file: String = {
         let corpus_arg = matches.value_of("corpus");
@@ -106,26 +133,43 @@ fn correct_cmd_handler<'a>(matches: &'a ArgMatches) -> (String, Vec<&'a str>) {
     (corpus_file, words)
 }
 
-async fn microservice_handler(mut req: Request<Body>) -> Result<Response<Body>, Infallible> {
+fn corpus_file(matches: &ArgMatches) -> String {
+    let corpus_file: String = {
+        let corpus_arg = matches.value_of("corpus");
+        if corpus_arg.is_some() {
+            corpus_arg.unwrap().to_string()
+        } else {
+            info!("Using default corpus file");
+            String::from("/home/gsiekaniec/devel/rust_projects/norvig_spell_checker/data/big.txt")
+        }
+    };
+    corpus_file
+}
+
+//, spell_checker: &SpellChecker
+async fn microservice_handler(mut req: Request<Body>, spell_checker: Arc<SpellChecker>) -> Result<Response<Body>, Infallible> {
 
     match (req.method(), req.uri().path()){
         (&Method::GET, "/correction") => {
-
-            let mut body = Vec::new();
-            while let Some(chunk) = req.body_mut().next().await {
-                body.extend_from_slice(&chunk.unwrap());
-            }
-            // try to parse as json with serde_json
-            let correction_req: CorrectionRequest = serde_json::from_slice(&body).unwrap();
-            info!("Received {:?}", correction_req);
-
-            let serialized_correction_req = serde_json::to_string(&correction_req).unwrap();
-            Ok(Response::new(Body::from(serialized_correction_req)))
+            let response = handle_get_correction_request(&mut req, spell_checker).await;
+            let serialized_response = serde_json::to_string(&response).unwrap();
+            Ok(Response::new(Body::from(serialized_response)))
         }
         _ => {
             Ok(empty_response_with_code(StatusCode::NOT_FOUND))
         }
     }
+}
+
+async fn handle_get_correction_request(req: &mut Request<Body>, spell_checker: Arc<SpellChecker>) -> CorrectionResponse {
+    let mut body = Vec::new();
+    while let Some(chunk) = req.body_mut().next().await {
+        body.extend_from_slice(&chunk.unwrap());
+    }
+    // try to parse as json with serde_json
+    let correction_req: CorrectionRequest = serde_json::from_slice(&body).unwrap();
+    info!("Received {:?}", correction_req);
+    provide_words_corrections_req(&spell_checker, correction_req.words)
 }
 
 
@@ -136,22 +180,4 @@ fn empty_response_with_code(status_code: StatusCode) -> Response<Body> {
         .unwrap()
 }
 
-#[derive(Debug)]
-#[derive(Deserialize)]
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct CorrectionRequest
-{
-    words: Vec<String>
-}
 
-struct Correction
-{
-    word: String,
-    correction: String
-}
-
-struct CorrectionResponse
-{
-    corrections: Vec<Correction>
-}

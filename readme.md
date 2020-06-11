@@ -10,9 +10,10 @@ The idea woudl be to play with Rust and see how it can be implemented with the f
 7. Parallelization - TBB pipeline style.
 8. ~~Multiple asserts in unit tests~~
 9. ~~Reading form file - nice, Use a pipe there to read line and pass to counter~~
-10. Make it API.
-11. Add subcommand:
-    a. to pass corrections and output in cmd
-    b. to start server and process requests.
+10. ~~Make it API.~~
+11. ~~Add subcommand:~~
+    a. ~~to pass corrections and output in cmd~~
+    b. ~~to start server and process requests.~~
     
 12. Build docker image
+13. Initalize spell check at the start and pass it to service handler function.
