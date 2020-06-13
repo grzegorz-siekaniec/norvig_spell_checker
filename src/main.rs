@@ -28,7 +28,7 @@ mod command_line_corrections;
 
 #[tokio::main]
 pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
-    dotenv().ok();
+    dotenv().expect("Failed to read .env file");
     env_logger::init();
 
     let matches = App::new("spell-checker")

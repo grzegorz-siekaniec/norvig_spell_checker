@@ -17,3 +17,11 @@ The idea woudl be to play with Rust and see how it can be implemented with the f
     
 12. Build docker image
 13. Initalize spell check at the start and pass it to service handler function.
+
+
+```commandline
+docker build --tag norvig .
+docker run -p:1234:80 norvig
+```
+
+The last command is exposing service locally on `0.0.0.0:1234` (mapping from `80`).

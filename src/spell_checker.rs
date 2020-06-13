@@ -563,9 +563,9 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_correction() {
-        let file: String =
-            String::from("/home/gsiekaniec/devel/rust_projects/norvig_spell_checker/data/big.txt");
+        let file: String = String::from("/data/big.txt");
         let sc = SpellChecker::from_corpus_file(&file);
 
         let misspelling_correct: Vec<(_, _)> = vec![
