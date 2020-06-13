@@ -1,47 +1,139 @@
 #[macro_use]
 extern crate log;
-extern crate env_logger;
-
 extern crate norvig_spell_checker;
-extern crate regex;
+extern crate env_logger;
+extern crate hyper;
+extern crate rayon;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
 
-use ascii_table::{Align, AsciiTable, Column};
-use clap::{App, Arg};
-use std::time::Instant;
+use std::convert::Infallible;
+use hyper::service::{make_service_fn, service_fn};
+use hyper::{Body, Method, Request, Response, Server, StatusCode};
 
-fn print_correction(word_correction: &Vec<Vec<String>>) {
-    let mut ascii_table = AsciiTable::default();
-    let mut word_column = Column::default();
-    word_column.header = "Word".into();
-    word_column.align = Align::Left;
-    ascii_table.columns.insert(0, word_column);
+use clap::{App, Arg, ArgMatches, SubCommand};
+use dotenv::dotenv;
+use std::env;
+use futures::{StreamExt};
+use norvig_spell_checker::spell_checker::SpellChecker;
+use std::sync::Arc;
+use crate::command_line_corrections::{CorrectionResponse, CorrectionRequest,
+                                      find_words_corrections, print_correction};
 
-    let mut suggestion_column = Column::default();
-    suggestion_column.header = "Correction".into();
-    suggestion_column.align = Align::Left;
-    ascii_table.columns.insert(1, suggestion_column);
+const CMD_RUN: &str = "run";
+const CMD_CORRECT: &str = "correct";
 
-    ascii_table.print(word_correction);
-}
+mod command_line_corrections;
 
-fn main() {
+#[tokio::main]
+pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
+    dotenv().ok();
+    env_logger::init();
+
     let matches = App::new("spell-checker")
         .version("1.0")
         .author("Grzegorz Siekaniec")
         .about("Suggests correction for a passed word or list of words")
-        .arg(
-            Arg::with_name("corpus")
-                .help("Specifies a corpus file to initialise spell-checker")
-                .takes_value(true)
-                .short("c")
-                .long("corpus")
-                .required(false)
-                .multiple(false),
+        .subcommand(
+            SubCommand::with_name(CMD_CORRECT)
+                .about("Provide corrections for specified words")
+                .arg(
+                    Arg::with_name("corpus")
+                        .help("Specifies a corpus file to initialise spell-checker")
+                        .takes_value(true)
+                        .short("c")
+                        .long("corpus")
+                        .required(false)
+                        .multiple(false),
+                )
+                .arg(Arg::with_name("words").required(true).multiple(true)),
         )
-        .arg(Arg::with_name("words").required(true).multiple(true))
+        .subcommand(SubCommand::with_name(CMD_RUN)
+            .about("Run the correction server.")
+            .arg(
+                Arg::with_name("corpus")
+                    .help("Specifies a corpus file to initialise spell-checker")
+                    .takes_value(true)
+                    .short("c")
+                    .long("corpus")
+                    .required(false)
+                    .multiple(false),
+            )
+        )
         .get_matches();
 
-    env_logger::init();
+    match matches.subcommand() {
+        (CMD_CORRECT, Some(matches)) => {
+            let (corpus_file, words) = cli_correction_handler(&matches);
+            let spell_checker = SpellChecker::from_corpus_file_par(&corpus_file);
+            let word_and_corrections = find_words_corrections(&spell_checker, words);
+            let word_and_correction_vec
+                = word_and_corrections.corrections
+                .into_iter()
+                .map(|correction| vec![correction.word, correction.correction])
+                .collect();
+            print_correction(&word_and_correction_vec);
+            Ok(())
+        }
+        (CMD_RUN, Some(matches)) => {
+            let corpus_file = corpus_file(matches);
+            let spell_checker = Arc::new(
+                SpellChecker::from_corpus_file_par(&corpus_file)
+            );
+
+            let make_svc = make_service_fn(move |_conn| {
+                // This is the `Service` that will handle the connection.
+                // `service_fn` is a helper to convert a function that
+                // returns a Response into a `Service`.
+                let spell_checker = spell_checker.clone();
+                async move {
+                    Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
+                        let spell_checker = spell_checker.clone();
+                            microservice_handler(req, spell_checker)
+                    }))
+                }
+            });
+
+            let addr = env::var("ADDRESS")
+                .unwrap_or_else(|_| "127.0.0.1:8080".into())
+                .parse()
+                .expect("can't parse ADDRESS variable");
+
+            let server = Server::bind(&addr).serve(make_svc);
+
+            info!("Listening on http://{}", addr);
+
+            server.await?;
+
+            Ok(())
+        }
+        _ => {
+            matches.usage();
+            Ok(())
+        }
+    }
+}
+
+fn cli_correction_handler(matches: &ArgMatches) -> (String, Vec<String>) {
+    let corpus_file = corpus_file(matches);
+    let words: Vec<String> = {
+        let arg_words = matches.values_of("words");
+        if arg_words.is_some() {
+            arg_words
+                .unwrap()
+                .into_iter()
+                .map(|word| word.to_string())
+                .collect()
+        } else {
+            vec![]
+        }
+    };
+
+    (corpus_file, words)
+}
+
+fn corpus_file(matches: &ArgMatches) -> String {
     let corpus_file: String = {
         let corpus_arg = matches.value_of("corpus");
         if corpus_arg.is_some() {
@@ -51,33 +143,43 @@ fn main() {
             String::from("/home/gsiekaniec/devel/rust_projects/norvig_spell_checker/data/big.txt")
         }
     };
-    let words: Vec<_> = {
-        let arg_words = matches.values_of("words");
-        if arg_words.is_some() {
-            arg_words.unwrap().collect()
-        } else {
-            vec![]
-        }
-    };
-    info!("Using corpus file located at {:}", corpus_file);
-    info!("Words {:?}", words);
-    let now = Instant::now();
-    let sc = norvig_spell_checker::spell_checker::SpellChecker::from_corpus_file(corpus_file);
-
-    let word_correction: Vec<Vec<_>> = words
-        .into_iter()
-        .map(|word| {
-            let word = word.to_string();
-            let correction = sc.correction(&word);
-            vec![word, correction]
-        })
-        .collect();
-
-    print_correction(&word_correction);
-
-    let new_now = Instant::now();
-    info!(
-        "It took {:?} to find corrections for words",
-        new_now.duration_since(now)
-    );
+    corpus_file
 }
+
+async fn microservice_handler(mut req: Request<Body>, spell_checker: Arc<SpellChecker>)
+    -> Result<Response<Body>, Infallible> {
+
+    match (req.method(), req.uri().path()){
+        (&Method::GET, "/correction") => {
+            let response = handle_get_correction_request(&mut req, spell_checker).await;
+            let serialized_response = serde_json::to_string(&response).unwrap();
+            Ok(Response::new(Body::from(serialized_response)))
+        }
+        _ => {
+            Ok(empty_response_with_code(StatusCode::NOT_FOUND))
+        }
+    }
+}
+
+async fn handle_get_correction_request(req: &mut Request<Body>, spell_checker: Arc<SpellChecker>)
+    -> CorrectionResponse {
+
+    let mut body = Vec::new();
+    while let Some(chunk) = req.body_mut().next().await {
+        body.extend_from_slice(&chunk.unwrap());
+    }
+    // TODO: add handling in case parsing fails
+    let correction_req: CorrectionRequest = serde_json::from_slice(&body).unwrap();
+    info!("Received {:?}", correction_req);
+    find_words_corrections(&spell_checker, correction_req.words)
+}
+
+
+fn empty_response_with_code(status_code: StatusCode) -> Response<Body> {
+    Response::builder()
+        .status(status_code)
+        .body(Body::empty())
+        .unwrap()
+}
+
+
