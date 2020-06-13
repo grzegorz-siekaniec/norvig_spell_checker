@@ -5,9 +5,9 @@ extern crate env_logger;
 extern crate norvig_spell_checker;
 extern crate regex;
 
+use ascii_table::{Align, AsciiTable, Column};
 use clap::{App, Arg};
-use std::time::{Instant};
-use ascii_table::{AsciiTable, Column, Align};
+use std::time::Instant;
 
 fn print_correction(word_correction: &Vec<Vec<String>>) {
     let mut ascii_table = AsciiTable::default();
@@ -30,19 +30,15 @@ fn main() {
         .author("Grzegorz Siekaniec")
         .about("Suggests correction for a passed word or list of words")
         .arg(
-             Arg::with_name("corpus")
-                 .help("Specifies a corpus file to initialise spell-checker")
-                 .takes_value(true)
-                 .short("c")
-                 .long("corpus")
-                 .required(false)
-                 .multiple(false)
+            Arg::with_name("corpus")
+                .help("Specifies a corpus file to initialise spell-checker")
+                .takes_value(true)
+                .short("c")
+                .long("corpus")
+                .required(false)
+                .multiple(false),
         )
-        .arg(
-            Arg::with_name("words")
-                .required(true)
-                .multiple(true)
-        )
+        .arg(Arg::with_name("words").required(true).multiple(true))
         .get_matches();
 
     env_logger::init();
@@ -50,8 +46,7 @@ fn main() {
         let corpus_arg = matches.value_of("corpus");
         if corpus_arg.is_some() {
             corpus_arg.unwrap().to_string()
-        }
-        else {
+        } else {
             info!("Using default corpus file");
             String::from("/home/gsiekaniec/devel/rust_projects/norvig_spell_checker/data/big.txt")
         }
@@ -60,8 +55,7 @@ fn main() {
         let arg_words = matches.values_of("words");
         if arg_words.is_some() {
             arg_words.unwrap().collect()
-        }
-        else {
+        } else {
             vec![]
         }
     };
@@ -70,8 +64,8 @@ fn main() {
     let now = Instant::now();
     let sc = norvig_spell_checker::spell_checker::SpellChecker::from_corpus_file(corpus_file);
 
-    let word_correction: Vec<Vec<_>>
-        = words.into_iter()
+    let word_correction: Vec<Vec<_>> = words
+        .into_iter()
         .map(|word| {
             let word = word.to_string();
             let correction = sc.correction(&word);
@@ -82,5 +76,8 @@ fn main() {
     print_correction(&word_correction);
 
     let new_now = Instant::now();
-    info!("It took {:?} to find corrections for words", new_now.duration_since(now));
+    info!(
+        "It took {:?} to find corrections for words",
+        new_now.duration_since(now)
+    );
 }
