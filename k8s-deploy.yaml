@@ -1,0 +1,39 @@
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  name: spell-checker-api
+spec:
+  selector:
+    matchLabels:
+      app: spell-checker-api
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: spell-checker-api
+    spec:
+      containers:
+        - name: spell-checker-api
+          image: spell-checker-api-docker-image
+          imagePullPolicy: Never
+          resources:
+            requests:
+              cpu: "4"
+            limits:
+              cpu: "4"
+          ports:
+            - containerPort: 8315 # make sure it matches port that we set to be exposed in Dockerfile
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spell-checker-api-service
+spec:
+  selector:
+    app: spell-checker-api
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 6005
+      targetPort: 8315
+---

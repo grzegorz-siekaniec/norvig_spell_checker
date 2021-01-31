@@ -1,8 +1,10 @@
 [package]
 name = "norvig_spell_checker"
+description = "Norvig Spell Checker built on 31-JAN-2021"
 version = "0.1.0"
 authors = ["Grzegorz Siekaniec"]
 edition = "2018"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
