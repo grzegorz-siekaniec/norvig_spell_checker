@@ -8,6 +8,7 @@ extern crate threadpool;
 use crossbeam_channel::unbounded;
 use libc::c_char;
 use std::collections::HashMap;
+use std::env;
 use std::ffi::{CStr, CString};
 use std::fs::File;
 use std::io::{self, BufRead};
@@ -80,7 +81,7 @@ fn update_word_count(word_count: &mut HashMap<String, usize>, vec: &[String]) {
 }
 
 fn deletes(splits: &[(String, String)]) -> Vec<String> {
-    let deletes: Vec<String> = splits
+    let deletes = splits
         .into_iter()
         .map(|(l, r)| {
             let l0 = r.len();
@@ -97,7 +98,7 @@ fn deletes(splits: &[(String, String)]) -> Vec<String> {
 fn transposes(splits: &[(String, String)]) -> Vec<String> {
     // transposes = [L + R[1] + R[0] + R[2:] for L, R in splits if len(R)>1]
 
-    let transposes: Vec<String> = splits
+    let transposes = splits
         .into_iter()
         .filter(|(_, r)| r.len() > 1)
         .map(|(l, r)| {
@@ -194,13 +195,28 @@ fn edits_distance_2(edits_1: &Vec<String>) -> Vec<String> {
 
 impl SpellChecker {
     pub fn from_corpus_file_par(corpus_fn: &String) -> SpellChecker {
+        let path_to_read = Path::new(&corpus_fn);
+        let corpus_file_exists = path_to_read.exists();
+        if !corpus_file_exists {
+            panic!("Corpus file cannot be found under {}",)
+        }
+
         info!("Using corpus file located at {:}", corpus_fn);
 
         let (snd, rcv) = unbounded();
 
-        let path_to_read = Path::new(&corpus_fn);
-        let pool = ThreadPool::new(num_cpus::get());
-        info!("Using {} threads", num_cpus::get());
+        let num_threads = match env::var("SPELL_CHECKER_NUM_THREADS") {
+            Ok(val) => val.parse::<usize>().unwrap(),
+            Err(_) => {
+                warn!("SPELL_CHECKER_NUM_THREADS environment variable not set. Using default.");
+                num_cpus::get()
+            }
+        };
+
+        let pool = {
+            info!("Using {} threads", num_threads);
+            ThreadPool::new(num_threads)
+        };
 
         // let file = File::open("foo.txt")?;
         // let reader = BufReader::new(file);
@@ -238,8 +254,9 @@ impl SpellChecker {
 
         let new_now = Instant::now();
         info!(
-            "Spell checker initialized. It took {:?} to instantate (par) ",
-            new_now.duration_since(now)
+            "Spell checker initialized. It took {:?} to instantiate (par). {} words processed",
+            new_now.duration_since(now),
+            word_count.keys().len()
         );
         SpellChecker { word_count }
     }

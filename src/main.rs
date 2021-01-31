@@ -19,7 +19,8 @@ use futures::{StreamExt};
 use norvig_spell_checker::spell_checker::SpellChecker;
 use std::sync::Arc;
 use crate::command_line_corrections::{CorrectionResponse, CorrectionRequest,
-                                      find_words_corrections, print_correction};
+                                      find_words_corrections};
+use std::time::Instant;
 
 const CMD_RUN: &str = "run";
 const CMD_CORRECT: &str = "correct";
@@ -30,6 +31,8 @@ mod command_line_corrections;
 pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
     dotenv().expect("Failed to read .env file");
     env_logger::init();
+
+    info!("Running {}", env!("CARGO_PKG_DESCRIPTION"));
 
     let matches = App::new("spell-checker")
         .version("1.0")
@@ -67,13 +70,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
         (CMD_CORRECT, Some(matches)) => {
             let (corpus_file, words) = cli_correction_handler(&matches);
             let spell_checker = SpellChecker::from_corpus_file_par(&corpus_file);
-            let word_and_corrections = find_words_corrections(&spell_checker, words);
-            let word_and_correction_vec
-                = word_and_corrections.corrections
-                .into_iter()
-                .map(|correction| vec![correction.word, correction.correction])
-                .collect();
-            print_correction(&word_and_correction_vec);
+            find_words_corrections(&spell_checker, words);
             Ok(())
         }
         (CMD_RUN, Some(matches)) => {
@@ -163,6 +160,7 @@ async fn microservice_handler(mut req: Request<Body>, spell_checker: Arc<SpellCh
 
 async fn handle_get_correction_request(req: &mut Request<Body>, spell_checker: Arc<SpellChecker>)
     -> CorrectionResponse {
+    let now = Instant::now();
 
     let mut body = Vec::new();
     while let Some(chunk) = req.body_mut().next().await {
@@ -170,7 +168,13 @@ async fn handle_get_correction_request(req: &mut Request<Body>, spell_checker: A
     }
     // TODO: add handling in case parsing fails
     let correction_req: CorrectionRequest = serde_json::from_slice(&body).unwrap();
-    info!("Received {:?}", correction_req);
+
+    let new_now = Instant::now();
+    info!("Received {:?}. It took {:?} to parse.",
+          correction_req,
+          new_now.duration_since(now)
+    );
+
     find_words_corrections(&spell_checker, correction_req.words)
 }
 

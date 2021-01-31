@@ -26,7 +26,7 @@ pub fn find_words_corrections(
     spell_checker: &SpellChecker,
     words: Vec<String>,
 ) -> CorrectionResponse {
-    info!("Words {:?}", words);
+    info!("Words to correct: {:?}", words);
     let now = Instant::now();
 
     let corrections: Vec<Correction> = words
@@ -41,10 +41,21 @@ pub fn find_words_corrections(
         "It took {:?} to find corrections for words",
         new_now.duration_since(now)
     );
+
+    print_correction(&corrections);
     CorrectionResponse { corrections }
 }
 
-pub fn print_correction(word_correction: &Vec<Vec<String>>) {
+pub fn print_correction(words_corrections: &Vec<Correction>) {
+    let word_and_correction_vec: Vec<Vec<String>> = words_corrections
+        .iter()
+        .map(|correction| vec![correction.word.clone(), correction.correction.clone()])
+        .collect();
+
+    print_correction_inner(&word_and_correction_vec);
+}
+
+fn print_correction_inner(word_correction: &Vec<Vec<String>>) {
     let mut ascii_table = AsciiTable::default();
     let mut word_column = Column::default();
     word_column.header = "Word".into();
