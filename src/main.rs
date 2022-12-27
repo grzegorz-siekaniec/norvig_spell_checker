@@ -42,7 +42,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
             SubCommand::with_name(CMD_CORRECT)
                 .about("Provide corrections for specified words")
                 .arg(
-                    Arg::with_name("corpus")
+                    Arg::new("corpus")
                         .help("Specifies a corpus file to initialise spell-checker")
                         .takes_value(true)
                         .short("c")
@@ -55,7 +55,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
         .subcommand(SubCommand::with_name(CMD_RUN)
             .about("Run the correction server.")
             .arg(
-                Arg::with_name("corpus")
+                Arg::new("corpus")
                     .help("Specifies a corpus file to initialise spell-checker")
                     .takes_value(true)
                     .short("c")
