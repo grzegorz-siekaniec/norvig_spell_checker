@@ -2,6 +2,7 @@ use ascii_table::{Align, AsciiTable, Column};
 use norvig_spell_checker::spell_checker::SpellChecker;
 use rayon::prelude::*;
 use std::time::Instant;
+use serde::de::Unexpected::Str;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -58,14 +59,14 @@ pub fn print_correction(words_corrections: &Vec<Correction>) {
 fn print_correction_inner(word_correction: &Vec<Vec<String>>) {
     let mut ascii_table = AsciiTable::default();
     let mut word_column = Column::default();
-    word_column.header = "Word".into();
-    word_column.align = Align::Left;
-    ascii_table.columns.insert(0, word_column);
+    word_column.set_header::<String>("Word".into());
+    word_column.set_align(Align::Left);
+    ascii_table.add_column(0, word_column);
 
     let mut suggestion_column = Column::default();
-    suggestion_column.header = "Correction".into();
-    suggestion_column.align = Align::Left;
-    ascii_table.columns.insert(1, suggestion_column);
+    suggestion_column.set_header::<String>("Correction".into());
+    suggestion_column.set_align(Align::Left);
+    ascii_table.add_column(1, suggestion_column);
 
     ascii_table.print(word_correction);
 }
