@@ -58,15 +58,16 @@ pub fn print_correction(words_corrections: &Vec<Correction>) {
 
 fn print_correction_inner(word_correction: &Vec<Vec<String>>) {
     let mut ascii_table = AsciiTable::default();
-    let mut word_column = Column::default();
-    word_column.set_header::<String>("Word".into());
-    word_column.set_align(Align::Left);
-    ascii_table.add_column(0, word_column);
 
-    let mut suggestion_column = Column::default();
-    suggestion_column.set_header::<String>("Correction".into());
-    suggestion_column.set_align(Align::Left);
-    ascii_table.add_column(1, suggestion_column);
+    ascii_table
+        .column(0)
+        .set_header::<String>("Word".into())
+        .set_align(Align::Left);
+
+    ascii_table
+        .column(1)
+        .set_header::<String>("Correction".into())
+        .set_align(Align::Left);
 
     ascii_table.print(word_correction);
 }
