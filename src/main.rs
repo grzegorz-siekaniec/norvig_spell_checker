@@ -14,10 +14,9 @@ use hyper::server::{Server};
 use hyper::{Body, Method, Request, Response, StatusCode};
 
 
-use clap::{App, Arg, ArgMatches, SubCommand, Command};
+use clap::{Arg, ArgMatches, SubCommand, Command};
 use dotenv::dotenv;
 use std::env;
-use futures::{StreamExt, TryFutureExt};
 use norvig_spell_checker::spell_checker::SpellChecker;
 use std::sync::Arc;
 use crate::command_line_corrections::{CorrectionResponse, CorrectionRequest,

@@ -1,8 +1,7 @@
-use ascii_table::{Align, AsciiTable, Column};
+use ascii_table::{Align, AsciiTable};
 use norvig_spell_checker::spell_checker::SpellChecker;
 use rayon::prelude::*;
 use std::time::Instant;
-use serde::de::Unexpected::Str;
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
