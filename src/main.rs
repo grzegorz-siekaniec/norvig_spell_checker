@@ -10,17 +10,19 @@ extern crate serde_json;
 
 use std::convert::Infallible;
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use hyper::server::{Server};
+use hyper::{Body, Method, Request, Response, StatusCode};
 
-use clap::{App, Arg, ArgMatches, SubCommand};
+
+use clap::{Arg, ArgMatches, SubCommand, Command};
 use dotenv::dotenv;
 use std::env;
-use futures::{StreamExt};
 use norvig_spell_checker::spell_checker::SpellChecker;
 use std::sync::Arc;
 use crate::command_line_corrections::{CorrectionResponse, CorrectionRequest,
                                       find_words_corrections};
 use std::time::Instant;
+use crate::hyper::body::Buf;
 
 const CMD_RUN: &str = "run";
 const CMD_CORRECT: &str = "correct";
@@ -34,7 +36,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
 
     info!("Running {}", env!("CARGO_PKG_DESCRIPTION"));
 
-    let matches = App::new("spell-checker")
+    let matches = Command::new("spell-checker")
         .version("1.0")
         .author("Grzegorz Siekaniec")
         .about("Suggests correction for a passed word or list of words")
@@ -42,10 +44,10 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
             SubCommand::with_name(CMD_CORRECT)
                 .about("Provide corrections for specified words")
                 .arg(
-                    Arg::with_name("corpus")
+                    Arg::new("corpus")
                         .help("Specifies a corpus file to initialise spell-checker")
                         .takes_value(true)
-                        .short("c")
+                        .short('c')
                         .long("corpus")
                         .required(false)
                         .multiple(false),
@@ -55,10 +57,10 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
         .subcommand(SubCommand::with_name(CMD_RUN)
             .about("Run the correction server.")
             .arg(
-                Arg::with_name("corpus")
+                Arg::new("corpus")
                     .help("Specifies a corpus file to initialise spell-checker")
                     .takes_value(true)
-                    .short("c")
+                    .short('c')
                     .long("corpus")
                     .required(false)
                     .multiple(false),
@@ -67,13 +69,13 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
         .get_matches();
 
     match matches.subcommand() {
-        (CMD_CORRECT, Some(matches)) => {
+        Some((CMD_CORRECT, matches)) => {
             let (corpus_file, words) = cli_correction_handler(&matches);
             let spell_checker = SpellChecker::from_corpus_file_par(&corpus_file);
             find_words_corrections(&spell_checker, words);
             Ok(())
         }
-        (CMD_RUN, Some(matches)) => {
+        Some((CMD_RUN, matches)) => {
             let corpus_file = corpus_file(matches);
             let spell_checker = Arc::new(
                 SpellChecker::from_corpus_file_par(&corpus_file)
@@ -106,7 +108,6 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>>  {
             Ok(())
         }
         _ => {
-            matches.usage();
             Ok(())
         }
     }
@@ -162,12 +163,10 @@ async fn handle_get_correction_request(req: &mut Request<Body>, spell_checker: A
     -> CorrectionResponse {
     let now = Instant::now();
 
-    let mut body = Vec::new();
-    while let Some(chunk) = req.body_mut().next().await {
-        body.extend_from_slice(&chunk.unwrap());
-    }
+    //et body = req.aggregate();
+    let buffer = hyper::body::aggregate(req).await.unwrap();
     // TODO: add handling in case parsing fails
-    let correction_req: CorrectionRequest = serde_json::from_slice(&body).unwrap();
+    let correction_req: CorrectionRequest = serde_json::from_reader(buffer.reader()).unwrap();
 
     let new_now = Instant::now();
     info!("Received {:?}. It took {:?} to parse.",

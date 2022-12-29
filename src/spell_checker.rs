@@ -198,7 +198,7 @@ impl SpellChecker {
         let path_to_read = Path::new(&corpus_fn);
         let corpus_file_exists = path_to_read.exists();
         if !corpus_file_exists {
-            panic!("Corpus file cannot be found under {}",)
+            panic!("{}", "Corpus file cannot be found under {}",)
         }
 
         info!("Using corpus file located at {:}", corpus_fn);

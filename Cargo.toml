@@ -3,31 +3,31 @@ name = "norvig_spell_checker"
 description = "Norvig Spell Checker built on 31-JAN-2021"
 version = "0.1.0"
 authors = ["Grzegorz Siekaniec"]
-edition = "2018"
+edition = "2021"
 
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-regex = ""
-log = "0.4.8"
-env_logger = "0.7.1"
-clap = ""
-ascii_table = "3.0.0"
-libc = ""
-crossbeam = ""
-crossbeam-channel = ""
-rayon = ""
-threadpool = ""
-num_cpus = ""
+regex = "1.7.0"
+log = "0.4.17"
+env_logger = "0.9.3"
+clap = "3.2.23"
+ascii_table = "4.0.2"
+libc = "0.2.139"
+crossbeam = "0.8.2"
+crossbeam-channel = "0.5.6"
+rayon = "1.6.1"
+threadpool = "1.8.1"
+num_cpus = "1.15.0"
 dotenv = "0.15"
-slab = ""
-futures = ""
-hyper = "0.13"
-tokio = { version = "0.2", features = ["full"] }
-serde = ""
-serde_derive = ""
-serde_json = ""
+slab = "0.4.7"
+futures = "0.3.25"
+hyper = { version = "0.14.23", features = ["http1", "server", "tcp"]}
+tokio = { version = "1.23.0", features = ["macros", "rt-multi-thread"] }
+serde = "1.0.152"
+serde_derive = "1.0.152"
+serde_json = "1.0.91"
 
 # [lib]
 # name = "norvig_spell_checker"
